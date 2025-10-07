@@ -1,0 +1,88 @@
+
+DELETE FROM vz-it-np-gudv-dev-dtwndo-0.aid_nwgenie_core_tbls.outage_line WHERE  schedule_time =safe_cast(process_ts as TIMESTAMP)   and trans_dt=Date(process_ts) ;
+
+INSERT INTO vz-it-np-gudv-dev-dtwndo-0.aid_nwgenie_core_tbls.outage_line
+(
+    trans_dt,
+    event_id,
+    mdn,
+    event_category,
+    event_type,
+    status_name,
+    event_customer_status,
+    event_sub_type,
+    got_service,
+    connection_before_impact,
+    outage_type,
+    start_date,
+    resolved_date,
+    state,
+    city,
+    zip,
+    num_of_sites,
+    area_impacted,
+    active_mdn_cnt,
+    reason_etrext,
+    ncs,
+    associated_planned_events,
+    oct_outage_id,
+    echo_id,
+    milestone_update,
+    process_dt,
+    schedule_time,
+    created_timestamp
+)
+SELECT DISTINCT
+    r.trans_dt,
+    m.event_id,
+    m.mdn,
+    m.event_category,
+    m.event_type,
+    m.status_name,
+    m.event_customer_status,
+    m.event_sub_type,
+    m.got_service,
+    m.connection_before_impact,
+    r.outage_type,
+    safe.PARSE_DATE('%Y%m%d',LEFT(r.start_time, 8)) AS start_time,
+    safe.PARSE_DATE('%Y%m%d',LEFT(r.resolution_time, 8)) AS resolved_time,
+    r.state,
+    r.city,
+    r.zip,
+    r.num_of_sites,
+    r.area_impacted,
+    -- r.event_type,
+    -- r.event_category
+    r.active_mdn_cnt,
+    r.reason_etrext, ncs,
+    r.associated_planned_events,
+    r.oct_outage_id,
+    r.echo_id,
+    r.milestone_update,
+    SAFE_CAST(process_ts AS DATE) AS process_dt,
+    safe_cast(process_ts as TIMESTAMP) as schedule_time,
+    cast(current_timestamp as timestamp) as created_timestamp
+    -- r.json_received_time,
+    -- COUNT (DISTINCT mdn) as impacted_mdns
+    FROM vz-it-pr-i37v-ndldo-0.vzn_ndl_nsp_core_tbls_rd_v.stp_ivr_outages_raw_v2 r
+    JOIN vz-it-pr-i37v-ndldo-0.vzn_ndl_nsp_core_tbls_rd_v.stp_ivr_outage_mdns_raw_v2 m
+    ON cast(r.event_id as numeric) = m.event_id
+    AND PARSE_DATE('%Y%m%d',LEFT(r.start_time, 8)) BETWEEN DATE_SUB(cast(TIMESTAMP(process_ts)  as DATE), INTERVAL 30 DAY) AND DATE_ADD(cast(TIMESTAMP(process_ts)  as DATE), INTERVAL 30 DAY)
+    
+    -- WHERE m.trans_dt = cast(trans_date as DATE)
+    -- AND r.trans_dt = cast(trans_date as DATE)
+
+    --   where safe_cast(substr(cast(m.arrival as string),9,2) as int64)=extract(hour from Timestamp (process_ts) )
+    --   and safe_cast(substr(cast(r.arrival as string),9,2) as int64)=extract(hour from Timestamp (process_ts) ) 
+    --   and r.trans_dt =date(process_ts)
+    --   and m.trans_dt =date(process_ts)
+
+    where r.arrival like FORMAT_TIMESTAMP('%Y%m%d%H%', TIMESTAMP(process_ts), 'UTC') 
+    and r.trans_dt =date(process_ts)
+    and m.trans_dt =date(process_ts)
+
+    -- AND r.resolved_time is not null
+    -- group by  1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+    QUALIFY row_number() OVER (PARTITION BY m.mdn, r.event_id, r.start_time ORDER BY r.json_received_time DESC, m.json_received_time DESC, r.resolution_time DESC) = 1
+
+;
